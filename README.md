@@ -4,7 +4,6 @@
 
 **Tres backends Flask detrás de Nginx, con balanceo de carga y monitoreo con Prometheus y Grafana, todo en Docker.**
 
-![CI](https://github.com/Davidev77/ProyectoFinalSO/actions/workflows/ci.yml/badge.svg?branch=develop)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3-000000?logo=flask&logoColor=white)
@@ -31,7 +30,7 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 | --- | --- | --- |
 | Backends Flask con métricas | 1 · Manuel | ✅ listo |
 | Nginx con balanceo y `stub_status` | 1 · Manuel | ✅ listo |
-| `docker-compose.yml` base y CI | 1 · Manuel | ✅ listo |
+| `docker-compose.yml` base | 1 · Manuel | ✅ listo |
 | Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ⏳ pendiente |
 | Pruebas de carga con k6 | 3 · Eddie | ⏳ pendiente |
 
@@ -39,16 +38,28 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 
 ```mermaid
 flowchart LR
-    host["Navegador o curl<br/>(host)"] -->|"localhost:8080"| nginx
+    host["Navegador, curl o k6<br/>(host)"]
+    host -->|"localhost:8080"| nginx
+    host -.->|"localhost:3000"| grafana
+    host -.->|"localhost:9090"| prometheus
     subgraph red["Red so-net (Docker)"]
-        nginx["nginx<br/>round robin"] -->|":5000"| b1["backend1"]
+        nginx["nginx :80<br/>round robin<br/>stub_status :8081"]
+        nginx -->|":5000"| b1["backend1"]
         nginx -->|":5000"| b2["backend2"]
         nginx -->|":5000"| b3["backend3"]
-        stub["stub_status :8081<br/>(solo interno)"] -.- nginx
+        exporter["nginx-exporter :9113"] -.->|"lee :8081/stub_status"| nginx
+        prometheus["Prometheus :9090"] -.->|"lee /metrics"| b1
+        prometheus -.-> b2
+        prometheus -.-> b3
+        prometheus -.-> exporter
+        prometheus -.-> cadvisor["cAdvisor :8080"]
+        grafana["Grafana :3000"] -.->|"consulta"| prometheus
     end
 ```
 
-Solo Nginx publica un puerto al host (`8080`). Los tres backends son la misma imagen Flask con distinto `INSTANCE_ID` y escuchan en el `5000` dentro de la red `so-net`; desde el host no se puede llegar a ellos. Nginx reparte las peticiones en turnos y, si un backend no responde, reintenta en el siguiente. El `stub_status` del puerto `8081` también es interno: lo leerá el exportador de Nginx en la Fase 2.
+Las líneas continuas son la Fase 1, ya construida; las punteadas, el monitoreo de la Fase 2, con los nombres y puertos que fija [`docs/CONTRATO.md`](docs/CONTRATO.md).
+
+Nginx publica el puerto `8080` al host y reparte las peticiones en turnos entre los tres backends; si uno no responde, reintenta en el siguiente. Los backends son la misma imagen Flask con distinto `INSTANCE_ID` y escuchan en el `5000` dentro de la red `so-net`, sin acceso desde el host. Prometheus lee el `/metrics` de cada backend directamente (no a través de Nginx), las métricas de Nginx a través de `nginx-exporter`, que a su vez lee el `stub_status` interno del puerto `8081`, y las de cada contenedor a través de cAdvisor. Grafana consulta a Prometheus y muestra todo en el dashboard. Además de Nginx, solo Prometheus y Grafana se publican al host. La prueba de carga con k6 (Fase 3) corre desde el host contra `localhost:8080`.
 
 ## Puesta en marcha
 
@@ -162,21 +173,6 @@ py -3.12 -m venv .venv
 pip install -r backend/requirements.txt pytest==9.2.0 ruff==0.17.5
 ```
 
-## Integración continua
-
-El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada pull request hacia `develop` o `main` y en cada push a `develop`. Tiene dos jobs, y los dos deben quedar en verde para fusionar:
-
-| Job | Qué revisa |
-| --- | --- |
-| `calidad` | `ruff check` sobre el backend, las pruebas con `pytest` y el Dockerfile con hadolint v2.15.1 (la misma versión que en local) |
-| `humo` | Solo corre si `calidad` pasó. Levanta el stack con `docker compose up -d --build --wait`, hace 9 peticiones y comprueba que respondieron las 3 instancias, revisa `/health`, `/metrics` y el `stub_status` de Nginx por la red interna, comprueba que 8081 y 5000 no se publican al host, y al final muestra los logs y baja todo |
-
-Para revisar el workflow antes de subirlo:
-
-```powershell
-docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.7
-```
-
 ## Estructura
 
 ```
@@ -185,7 +181,6 @@ nginx/              nginx.conf
 monitoring/         Prometheus y Grafana (Fase 2)
 k6/                 pruebas de carga (Fase 3)
 docs/               CONTRATO.md e imágenes
-.github/workflows/  CI
 docker-compose.yml
 ```
 
@@ -193,7 +188,6 @@ docker-compose.yml
 
 - `main` solo recibe la entrega final; el trabajo se integra en `develop`.
 - Cada fase trabaja en su rama (`fase1-base`, `fase2-monitoreo`, `fase3-carga`) y abre un pull request hacia `develop`.
-- El CI debe estar en verde para fusionar.
 - Los nombres compartidos entre fases (servicios, puertos, métricas) están en [`docs/CONTRATO.md`](docs/CONTRATO.md).
 
 ## Documentación
