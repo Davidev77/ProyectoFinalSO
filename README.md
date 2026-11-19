@@ -29,21 +29,35 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 
 | Pieza | Fase | Estado |
 | --- | --- | --- |
-| Backends Flask con métricas | 1 · Manuel | ⏳ en curso |
-| Nginx con balanceo y `stub_status` | 1 · Manuel | ⏳ en curso |
-| `docker-compose.yml` base y CI | 1 · Manuel | ⏳ en curso |
+| Backends Flask con métricas | 1 · Manuel | ✅ listo |
+| Nginx con balanceo y `stub_status` | 1 · Manuel | ✅ listo |
+| `docker-compose.yml` base y CI | 1 · Manuel | ✅ listo |
 | Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ⏳ pendiente |
 | Pruebas de carga con k6 | 3 · Eddie | ⏳ pendiente |
 
 ## Arquitectura
 
-> Pendiente · Fase 1 (Manuel): diagrama mermaid del flujo host → Nginx → backends y explicación corta.
+```mermaid
+flowchart LR
+    host["Navegador o curl<br/>(host)"] -->|"localhost:8080"| nginx
+    subgraph red["Red so-net (Docker)"]
+        nginx["nginx<br/>round robin"] -->|":5000"| b1["backend1"]
+        nginx -->|":5000"| b2["backend2"]
+        nginx -->|":5000"| b3["backend3"]
+        stub["stub_status :8081<br/>(solo interno)"] -.- nginx
+    end
+```
+
+Solo Nginx publica un puerto al host (`8080`). Los tres backends son la misma imagen Flask con distinto `INSTANCE_ID` y escuchan en el `5000` dentro de la red `so-net`; desde el host no se puede llegar a ellos. Nginx reparte las peticiones en turnos y, si un backend no responde, reintenta en el siguiente. El `stub_status` del puerto `8081` también es interno: lo leerá el exportador de Nginx en la Fase 2.
 
 ## Puesta en marcha
 
 ### Requisitos
 
-> Pendiente · Fase 1 (Manuel): Docker Desktop, Git y lo necesario para correr las pruebas.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) encendido (incluye Docker Compose v2).
+- Git.
+- El puerto `8080` libre. Si el laboratorio anterior (`lab-proxy`) está levantado, bájalo antes.
+- Solo para correr las pruebas del backend: Python 3.12.
 
 ### 1. Clonar el repositorio
 
@@ -54,11 +68,24 @@ cd ProyectoFinalSO
 
 ### 2. Levantar la infraestructura
 
-> Pendiente · Fase 1 (Manuel).
+```powershell
+docker compose up -d --build --wait
+```
+
+`--wait` espera a que los tres backends pasen su healthcheck; Nginx arranca después de ellos.
 
 ### 3. Verificar que todo funciona
 
-> Pendiente · Fase 1 (Manuel).
+```powershell
+docker compose ps                     # 4 servicios; backend1..3 "healthy"
+curl.exe -s http://localhost:8080/
+```
+
+```json
+{"contenedor":"ab368547842f","instancia":"1","mensaje":"Hola desde la instancia 1"}
+```
+
+También se puede abrir http://localhost:8080 en el navegador.
 
 ## URLs de acceso
 
@@ -71,7 +98,34 @@ cd ProyectoFinalSO
 
 ## Verificar el balanceo de carga
 
-> Pendiente · Fase 1 (Manuel): comando para ver el reparto entre instancias, la cabecera `X-Upstream` y el log de Nginx.
+Nueve peticiones seguidas se reparten 3 / 3 / 3:
+
+```powershell
+1..9 | ForEach-Object { (curl.exe -s http://localhost:8080/ | ConvertFrom-Json).instancia }
+# cada instancia aparece 3 veces, p. ej. 2 1 3 2 1 3 2 1 3
+```
+
+Cada respuesta trae la cabecera `X-Upstream` con la IP y el puerto del backend que la atendió:
+
+```powershell
+curl.exe -si http://localhost:8080/ | Select-String "X-Upstream"
+# X-Upstream: 172.18.0.2:5000
+```
+
+El log de Nginx muestra lo mismo por cada petición, con su tiempo:
+
+```powershell
+docker compose logs nginx --tail 5
+# ... "GET / HTTP/1.1" estado=200 instancia=172.18.0.2:5000 tiempo=0.002 upstream_tiempo=0.003
+```
+
+Para ver la tolerancia a fallos, detén un backend y repite las peticiones: siguen respondiendo los otros dos, sin errores.
+
+```powershell
+docker compose stop backend2
+1..6 | ForEach-Object { (curl.exe -s http://localhost:8080/ | ConvertFrom-Json).instancia }
+docker compose start backend2
+```
 
 ## Monitoreo
 
@@ -83,11 +137,45 @@ cd ProyectoFinalSO
 
 ## Comandos
 
-> Pendiente · Fase 1 (Manuel): tabla de comandos de uso diario.
+Comandos en PowerShell, desde la raíz del repo. Usa `curl.exe`: en PowerShell, `curl` es un alias de otro comando.
+
+| Comando | Para qué |
+| --- | --- |
+| `docker compose up -d --build --wait` | Construir y levantar todo |
+| `docker compose ps` | Estado de los servicios |
+| `docker compose logs nginx --tail 20` | Log de balanceo (`instancia=`, `tiempo=`) |
+| `docker compose exec nginx wget -qO- http://127.0.0.1:8081/stub_status` | Ver `stub_status` desde dentro de Nginx |
+| `docker compose exec backend1 whoami` | Comprobar que el backend no corre como root (`triada`) |
+| `docker stats --no-stream` | CPU y memoria de cada contenedor (límite de 256 MiB por backend) |
+| `curl.exe -s "http://localhost:8080/lento?ms=300"` | Respuesta lenta a propósito (máximo 2000 ms) |
+| `docker compose stop backend2` · `docker compose start backend2` | Simular la caída de un backend |
+| `docker compose down` | Bajar todo |
+| `cd backend; python -m pytest tests -v` | Pruebas del backend (con `.venv` activo) |
+| `cd backend; ruff check .` | Estilo y errores de Python (con `.venv` activo) |
+| `Get-Content backend/Dockerfile \| docker run --rm -i hadolint/hadolint:v2.15.1` | Revisar el Dockerfile |
+
+Para preparar el entorno de pruebas una sola vez:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt pytest==9.2.0 ruff==0.17.5
+```
 
 ## Integración continua
 
-> Pendiente · Fase 1 (Manuel): qué revisa el pipeline en cada pull request.
+El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada pull request hacia `develop` o `main` y en cada push a `develop`. Tiene dos jobs, y los dos deben quedar en verde para fusionar:
+
+| Job | Qué revisa |
+| --- | --- |
+| `calidad` | `ruff check` sobre el backend, las pruebas con `pytest` y el Dockerfile con hadolint v2.15.1 (la misma versión que en local) |
+| `humo` | Solo corre si `calidad` pasó. Levanta el stack con `docker compose up -d --build --wait`, hace 9 peticiones y comprueba que respondieron las 3 instancias, revisa `/health`, `/metrics` y el `stub_status` de Nginx por la red interna, comprueba que 8081 y 5000 no se publican al host, y al final muestra los logs y baja todo |
+
+Para revisar el workflow antes de subirlo:
+
+```powershell
+docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.7
+```
 
 ## Estructura
 
@@ -96,7 +184,7 @@ backend/            app Flask, Dockerfile y pruebas
 nginx/              nginx.conf
 monitoring/         Prometheus y Grafana (Fase 2)
 k6/                 pruebas de carga (Fase 3)
-docs/               CONTRATO.md y documentos de diseño
+docs/               CONTRATO.md e imágenes
 .github/workflows/  CI
 docker-compose.yml
 ```

@@ -1,0 +1,57 @@
+# Proyecto Tríada: 3 backends Flask detrás de Nginx (round robin).
+name: triada
+
+# Bloque común de los backends (ancla YAML): cada backend lo reutiliza con <<: *backend.
+x-backend: &backend
+  build: ./backend
+  restart: unless-stopped
+  networks:
+    - so-net
+  cpus: 0.5          # techo de CPU por backend
+  mem_limit: 256m    # techo de memoria por backend
+  # La imagen no tiene curl: el healthcheck usa Python.
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+    start_period: 5s
+
+services:
+  backend1:
+    <<: *backend
+    environment:
+      INSTANCE_ID: "1"
+
+  backend2:
+    <<: *backend
+    environment:
+      INSTANCE_ID: "2"
+
+  backend3:
+    <<: *backend
+    environment:
+      INSTANCE_ID: "3"
+
+  # Proxy inverso. Único servicio con puerto publicado (8080 del host -> 80).
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # Nginx arranca solo cuando los tres backends están sanos.
+    depends_on:
+      backend1:
+        condition: service_healthy
+      backend2:
+        condition: service_healthy
+      backend3:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - so-net
+
+networks:
+  so-net:
+    driver: bridge
