@@ -50,9 +50,8 @@ La fuente de verdad es `docs/CONTRATO.md`: servicios, puertos, red `so-net`, rut
 - Escritura sin muletillas de IA (skill `humanizer` antes de dar por cerrado un texto).
 
 ## Cosas a tener en cuenta
-- El laboratorio anterior (`C:\proyectos\lab-proxy`) también usa el puerto 8080: si está levantado, hay que bajarlo antes.
 - `.gitattributes` fuerza LF; si un archivo aparece con CRLF (`git ls-files --eol`), el CI en Linux puede fallar.
-- cAdvisor en Docker Desktop para Windows a veces no muestra los nombres de los contenedores (Fase 2: coordinar con Manuel).
+- cAdvisor en Docker Desktop para Windows a veces no muestra los nombres de los contenedores.
 - Nginx usa `zone` en el upstream para que el round robin sea parejo entre sus procesos (3/3/3 en 9 peticiones).
 - Nginx vuelve a resolver `backend1..3` cada 10 s (`resolver 127.0.0.11` + `resolve`): un backend recreado con otra IP recupera su tráfico sin reiniciar Nginx.
 - `stub_status` desde dentro del contenedor de Nginx: usar `127.0.0.1:8081`, no `localhost` (Alpine lo resuelve a IPv6 y Nginx escucha en IPv4). Desde otro contenedor: `nginx:8081`.
