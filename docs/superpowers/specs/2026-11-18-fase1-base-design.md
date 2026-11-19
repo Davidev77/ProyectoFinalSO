@@ -96,7 +96,9 @@ Reservado para otras fases (lo fija el contrato): `monitoring/prometheus/prometh
 
 ### 6.3 Dockerfile
 
-`python:3.12-slim` → `WORKDIR /app` → `COPY requirements.txt .` → `RUN pip install --no-cache-dir -r requirements.txt` → `COPY app.py .` → `RUN useradd --no-create-home --shell /usr/sbin/nologin triada` → `USER triada` → `EXPOSE 5000` → `CMD ["gunicorn", "--workers", "1", "--threads", "4", "--bind", "0.0.0.0:5000", "app:app"]`.
+`python:3.12-slim` → `WORKDIR /app` → `COPY requirements.txt .` → `RUN pip install --no-cache-dir -r requirements.txt` → `COPY app.py .` → `RUN useradd --no-create-home --shell /usr/sbin/nologin triada` → `USER triada` → `EXPOSE 5000` → `CMD ["gunicorn", "--workers", "1", "--threads", "4", "--no-control-socket", "--bind", "0.0.0.0:5000", "app:app"]`.
+
+*Decisión de Manuel (Tarea 2):* `--no-control-socket` porque gunicorn 27 crea un socket de control en el home del usuario y `triada` no tiene home (sin la opción, cada arranque registra un ERROR). `# hadolint ignore=DL3066` sobre `USER triada`: hadolint 2.15 pide UID numérico (regla pensada para Kubernetes) y se conserva el nombre; hadolint fijo en v2.15.1.
 
 *Decisión de Claude:* `--threads 4` mantiene un solo proceso (métricas correctas) pero permite atender varias peticiones a la vez; con 1 worker síncrono la prueba de carga de la Fase 3 haría cola y el p95 se dispararía. `.dockerignore` excluye `tests/`, `__pycache__/` y similares para que no entren a la imagen. El proceso corre con el usuario sin privilegios `triada`: si alguien explota la app, no es root dentro del contenedor.
 
@@ -104,7 +106,7 @@ Reservado para otras fases (lo fija el contrato): `monitoring/prometheus/prometh
 
 Imagen `nginx:1.27-alpine`, montado en `/etc/nginx/conf.d/default.conf:ro` (solo bloques `upstream` y `server`).
 
-- `upstream backends { zone backends 64k; server backend1:5000 max_fails=3 fail_timeout=10s; ... }` (round robin, el método por defecto). `max_fails`/`fail_timeout`: tras 3 fallos seguidos Nginx deja de enviar tráfico a ese backend durante 10 s y luego lo vuelve a probar.
+- `upstream backends { zone backends 64k; resolver 127.0.0.11 valid=10s ipv6=off; server backend1:5000 resolve max_fails=3 fail_timeout=10s; ... }` (round robin, el método por defecto). *Decisión de Manuel (Tarea 3):* `resolver` + `resolve` hacen que Nginx vuelva a consultar el DNS de Docker cada 10 s; sin eso, un backend recreado con otra IP deja de recibir tráfico. `max_fails`/`fail_timeout`: tras 3 fallos seguidos Nginx deja de enviar tráfico a ese backend durante 10 s y luego lo vuelve a probar.
 - `log_format balanceo '$remote_addr "$request" estado=$status instancia=$upstream_addr tiempo=$request_time upstream_tiempo=$upstream_response_time';` usado en `access_log /var/log/nginx/access.log balanceo;` (la imagen oficial lo envía a stdout): `docker compose logs nginx` muestra a qué backend fue cada petición y cuánto tardó. *Decisión de Claude:* `zone` hace que los procesos worker de Nginx compartan el turno del round robin; sin ella cada worker lleva su propia cuenta y 9 peticiones pueden repartirse 4/3/2 en vez de 3/3/3.
 - `server` en 80: `proxy_pass http://backends;`, `proxy_set_header Host $host;`, `X-Real-IP $remote_addr`, `X-Forwarded-For $proxy_add_x_forwarded_for`, `add_header X-Upstream $upstream_addr always;`, `proxy_connect_timeout 2s;` y `proxy_next_upstream error timeout http_502 http_503;` (si un backend cae, Nginx reintenta la petición en el siguiente y el cliente no ve el error; lo usa la demo de fallo de la Fase 3).
 - `server` en 8081: `location /stub_status { stub_status; }`, `access_log off`. Solo accesible dentro de `so-net` (lo lee `nginx-exporter` en la Fase 2).
@@ -178,7 +180,7 @@ Crear la carpeta, clonar, copiar los archivos preparados, primer commit en `main
 2. `http://localhost:8080/` responde desde el navegador del host.
 3. 9 peticiones seguidas se reparten 3 / 3 / 3 entre las instancias (JSON `instancia` y cabecera `X-Upstream`).
 4. Las 3 instancias responden `/health` y exponen en `/metrics` `http_requests_total` y `http_request_duration_seconds` con la etiqueta `instancia`; `/metrics` y `/health` no se cuentan.
-5. `stub_status` responde dentro de la red (`docker compose exec nginx wget -qO- http://localhost:8081/stub_status`) y **no** responde desde el host; los backends tampoco son accesibles desde el host.
+5. `stub_status` responde dentro de la red (`docker compose exec nginx wget -qO- http://127.0.0.1:8081/stub_status`; con `localhost` falla porque Alpine lo resuelve a IPv6 y Nginx escucha en IPv4) y **no** responde desde el host; los backends tampoco son accesibles desde el host.
 6. Con un backend detenido (`docker compose stop backend2`) Nginx sigue respondiendo con los otros dos, sin errores para el cliente.
 6b. Extras: `docker compose exec backend1 whoami` → `triada`; `docker compose logs nginx` muestra `instancia=` y `tiempo=`; `docker stats --no-stream` muestra el límite de 256 MiB en los backends; `/lento?ms=300` tarda unos 300 ms y `/lento?ms=9999` se acota a 2000.
 7. `docker compose down` y `up` vuelve a dejar todo funcionando.
