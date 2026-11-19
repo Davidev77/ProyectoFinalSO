@@ -2,7 +2,7 @@
 
 Infraestructura en Docker: Nginx como proxy inverso reparte con round robin entre 3 backends Flask que exponen métricas para Prometheus; Prometheus, Grafana, nginx-exporter y cAdvisor monitorean todo. Proyecto final de Sistemas Operativos · UAO · 2026. Repo: `Davidev77/ProyectoFinalSO`.
 
-**Estado:** Fase 1 (base, Manuel) terminada: tag `v0.1-base`. Siguiente: Fase 2 monitoreo (Christian) y luego Fase 3 pruebas de carga y cierre (Eddie).
+**Estado:** Fase 1 (base, Manuel) terminada: tag `v0.1-base`. Fase 2 (monitoreo, Christian) lista para PR. Siguiente: Fase 3 pruebas de carga y cierre (Eddie).
 
 ## Comandos (PowerShell, en la raíz)
 - `docker compose up -d --build --wait`: levanta todo y espera a que los backends estén `healthy`
