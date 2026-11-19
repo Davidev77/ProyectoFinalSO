@@ -1,0 +1,25 @@
+# Prometheus consulta ("scrapea") cada target cada 5 s.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # Prometheus se mide a sí mismo
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Los 3 backends, directo (no a través de Nginx) para ver cada instancia por separado
+  - job_name: backends
+    static_configs:
+      - targets: ["backend1:5000", "backend2:5000", "backend3:5000"]
+
+  # Métricas de Nginx: las expone nginx-exporter leyendo stub_status
+  - job_name: nginx
+    static_configs:
+      - targets: ["nginx-exporter:9113"]
+
+  # CPU, memoria, red y disco de cada contenedor
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]

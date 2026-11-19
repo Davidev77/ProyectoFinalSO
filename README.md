@@ -31,7 +31,7 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 | Backends Flask con métricas | 1 · Manuel | ✅ listo |
 | Nginx con balanceo y `stub_status` | 1 · Manuel | ✅ listo |
 | `docker-compose.yml` base | 1 · Manuel | ✅ listo |
-| Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ⏳ pendiente |
+| Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ✅ listo |
 | Pruebas de carga con k6 | 3 · Eddie | ⏳ pendiente |
 
 ## Arquitectura
@@ -83,12 +83,14 @@ cd ProyectoFinalSO
 docker compose up -d --build --wait
 ```
 
-`--wait` espera a que los tres backends pasen su healthcheck; Nginx arranca después de ellos.
+`--wait` espera a que los backends, Prometheus y Grafana pasen su healthcheck. Se levantan 8 contenedores.
+
+Opcional: para cambiar la contraseña de Grafana, copia `.env.example` como `.env` y edita `GRAFANA_PASSWORD` antes de levantar.
 
 ### 3. Verificar que todo funciona
 
 ```powershell
-docker compose ps                     # 4 servicios; backend1..3 "healthy"
+docker compose ps                     # 8 servicios; backend1..3, prometheus y grafana "healthy"
 curl.exe -s http://localhost:8080/
 ```
 
@@ -103,9 +105,9 @@ También se puede abrir http://localhost:8080 en el navegador.
 | Servicio | URL | Credenciales |
 | --- | --- | --- |
 | Aplicación (Nginx) | http://localhost:8080 | — |
-| Prometheus | Pendiente · Fase 2 | — |
-| Grafana | Pendiente · Fase 2 | Pendiente · Fase 2 |
-| cAdvisor | Pendiente · Fase 2 | — |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | usuario `admin` · contraseña `admin123` (o la de `GRAFANA_PASSWORD` en `.env`) |
+| cAdvisor | http://localhost:8082 | — |
 
 ## Verificar el balanceo de carga
 
@@ -140,7 +142,26 @@ docker compose start backend2
 
 ## Monitoreo
 
-> Pendiente · Fase 2 (Christian): cómo revisar los targets de Prometheus y abrir el dashboard «Infraestructura SO».
+### Revisar los targets en Prometheus
+
+Abre http://localhost:9090/targets. Deben aparecer **6 targets en UP**: `prometheus` (1), `backends` (3), `nginx` (1) y `cadvisor` (1). Prometheus los consulta cada 5 s.
+
+### Abrir el dashboard en Grafana
+
+1. Abre http://localhost:3000 e inicia sesión con `admin` y la contraseña de la tabla de URLs.
+2. Ve a **Dashboards → Infraestructura SO**. El datasource y el dashboard se cargan solos (provisioning), sin configurar nada a mano.
+3. Genera tráfico para ver las gráficas moverse:
+
+```powershell
+1..200 | ForEach-Object { curl.exe -s http://localhost:8080/ | Out-Null }
+1..30 | ForEach-Object { curl.exe -s "http://localhost:8080/lento?ms=800" | Out-Null }
+```
+
+El dashboard tiene paneles de estado de targets, tasa de solicitudes y latencia p95 por instancia, errores 5xx, conexiones y peticiones por segundo de Nginx, y CPU, memoria, red y disco por contenedor.
+
+### Persistencia
+
+Los datos de Prometheus y Grafana viven en los volúmenes `prometheus_data` y `grafana_data`. Tras `docker compose down` y `docker compose up -d --wait` se conservan. `docker compose down -v` los borra.
 
 ## Pruebas de carga
 
@@ -178,7 +199,7 @@ pip install -r backend/requirements.txt pytest==9.2.0 ruff==0.17.5
 ```
 backend/            app Flask, Dockerfile y pruebas
 nginx/              nginx.conf
-monitoring/         Prometheus y Grafana (Fase 2)
+monitoring/         prometheus.yml, provisioning de Grafana y dashboard (Fase 2)
 k6/                 pruebas de carga (Fase 3)
 docs/               CONTRATO.md e imágenes
 docker-compose.yml

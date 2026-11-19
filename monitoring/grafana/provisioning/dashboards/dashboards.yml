@@ -1,0 +1,10 @@
+# Le dice a Grafana de qué carpeta cargar los dashboards en JSON
+apiVersion: 1
+
+providers:
+  - name: Tríada
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

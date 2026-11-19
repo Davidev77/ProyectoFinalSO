@@ -2,7 +2,7 @@
 
 Infraestructura en Docker: Nginx como proxy inverso reparte con round robin entre 3 backends Flask que exponen métricas para Prometheus; Prometheus, Grafana, nginx-exporter y cAdvisor monitorean todo. Proyecto final de Sistemas Operativos · UAO · 2026. Repo: `Davidev77/ProyectoFinalSO`.
 
-**Estado:** Fase 1 (base, Manuel) terminada: tag `v0.1-base`. Siguiente: Fase 2 monitoreo (Christian) y luego Fase 3 pruebas de carga y cierre (Eddie).
+**Estado:** Fase 1 (base, Manuel) terminada: tag `v0.1-base`. Fase 2 (monitoreo, Christian) lista para PR. Siguiente: Fase 3 pruebas de carga y cierre (Eddie).
 
 ## Comandos (PowerShell, en la raíz)
 - `docker compose up -d --build --wait`: levanta todo y espera a que los backends estén `healthy`
@@ -50,9 +50,8 @@ La fuente de verdad es `docs/CONTRATO.md`: servicios, puertos, red `so-net`, rut
 - Escritura sin muletillas de IA (skill `humanizer` antes de dar por cerrado un texto).
 
 ## Cosas a tener en cuenta
-- El laboratorio anterior (`C:\proyectos\lab-proxy`) también usa el puerto 8080: si está levantado, hay que bajarlo antes.
 - `.gitattributes` fuerza LF; si un archivo aparece con CRLF (`git ls-files --eol`), el CI en Linux puede fallar.
-- cAdvisor en Docker Desktop para Windows a veces no muestra los nombres de los contenedores (Fase 2: coordinar con Manuel).
+- cAdvisor en Docker Desktop para Windows a veces no muestra los nombres de los contenedores.
 - Nginx usa `zone` en el upstream para que el round robin sea parejo entre sus procesos (3/3/3 en 9 peticiones).
 - Nginx vuelve a resolver `backend1..3` cada 10 s (`resolver 127.0.0.11` + `resolve`): un backend recreado con otra IP recupera su tráfico sin reiniciar Nginx.
 - `stub_status` desde dentro del contenedor de Nginx: usar `127.0.0.1:8081`, no `localhost` (Alpine lo resuelve a IPv6 y Nginx escucha en IPv4). Desde otro contenedor: `nginx:8081`.
