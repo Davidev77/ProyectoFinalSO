@@ -31,7 +31,7 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 | --- | --- | --- |
 | Backends Flask con métricas | 1 · Manuel | ✅ listo |
 | Nginx con balanceo y `stub_status` | 1 · Manuel | ✅ listo |
-| `docker-compose.yml` base y CI | 1 · Manuel | ⏳ en curso |
+| `docker-compose.yml` base y CI | 1 · Manuel | ✅ listo |
 | Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ⏳ pendiente |
 | Pruebas de carga con k6 | 3 · Eddie | ⏳ pendiente |
 
@@ -102,7 +102,7 @@ Nueve peticiones seguidas se reparten 3 / 3 / 3:
 
 ```powershell
 1..9 | ForEach-Object { (curl.exe -s http://localhost:8080/ | ConvertFrom-Json).instancia }
-# 1 2 3 1 2 3 1 2 3
+# cada instancia aparece 3 veces, p. ej. 2 1 3 2 1 3 2 1 3
 ```
 
 Cada respuesta trae la cabecera `X-Upstream` con la IP y el puerto del backend que la atendió:
@@ -151,7 +151,7 @@ Comandos en PowerShell, desde la raíz del repo. Usa `curl.exe`: en PowerShell, 
 | `docker compose stop backend2` · `docker compose start backend2` | Simular la caída de un backend |
 | `docker compose down` | Bajar todo |
 | `cd backend; python -m pytest tests -v` | Pruebas del backend (con `.venv` activo) |
-| `ruff check backend` | Estilo y errores de Python |
+| `cd backend; ruff check .` | Estilo y errores de Python (con `.venv` activo) |
 | `Get-Content backend/Dockerfile \| docker run --rm -i hadolint/hadolint:v2.15.1` | Revisar el Dockerfile |
 
 Para preparar el entorno de pruebas una sola vez:
@@ -169,7 +169,7 @@ El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada
 | Job | Qué revisa |
 | --- | --- |
 | `calidad` | `ruff check` sobre el backend, las pruebas con `pytest` y el Dockerfile con hadolint v2.15.1 (la misma versión que en local) |
-| `humo` | Solo corre si `calidad` pasó. Levanta el stack con `docker compose up -d --build --wait`, hace 9 peticiones y comprueba que respondieron las 3 instancias, revisa `/health`, `/metrics` y el `stub_status` de Nginx por la red interna, y al final muestra los logs y baja todo |
+| `humo` | Solo corre si `calidad` pasó. Levanta el stack con `docker compose up -d --build --wait`, hace 9 peticiones y comprueba que respondieron las 3 instancias, revisa `/health`, `/metrics` y el `stub_status` de Nginx por la red interna, comprueba que 8081 y 5000 no se publican al host, y al final muestra los logs y baja todo |
 
 Para revisar el workflow antes de subirlo:
 
@@ -184,7 +184,7 @@ backend/            app Flask, Dockerfile y pruebas
 nginx/              nginx.conf
 monitoring/         Prometheus y Grafana (Fase 2)
 k6/                 pruebas de carga (Fase 3)
-docs/               CONTRATO.md y documentos de diseño
+docs/               CONTRATO.md e imágenes
 .github/workflows/  CI
 docker-compose.yml
 ```

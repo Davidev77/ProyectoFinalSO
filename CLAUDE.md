@@ -2,15 +2,15 @@
 
 Infraestructura en Docker: Nginx como proxy inverso reparte con round robin entre 3 backends Flask que exponen métricas para Prometheus; Prometheus, Grafana, nginx-exporter y cAdvisor monitorean todo. Proyecto final de Sistemas Operativos · UAO · 2026. Repo: `Davidev77/ProyectoFinalSO`.
 
-**Estado:** Fase 1 (base, Manuel) en curso en `fase1-base`. Pendiente: Fase 2 monitoreo (Christian) y Fase 3 pruebas de carga y cierre (Eddie). Spec y plan de la Fase 1 en `docs/superpowers/`.
+**Estado:** Fase 1 (base, Manuel) terminada: tag `v0.1-base`. Siguiente: Fase 2 monitoreo (Christian) y luego Fase 3 pruebas de carga y cierre (Eddie).
 
 ## Comandos (PowerShell, en la raíz)
 - `docker compose up -d --build --wait`: levanta todo y espera a que los backends estén `healthy`
 - `docker compose ps` · `docker compose logs nginx --tail 20` · `docker compose down`
-- `1..9 | ForEach-Object { (curl.exe -s http://localhost:8080/ | ConvertFrom-Json).instancia }`: ver el reparto (1 2 3 1 2 3 …)
+- `1..9 | ForEach-Object { (curl.exe -s http://localhost:8080/ | ConvertFrom-Json).instancia }`: ver el reparto (cada instancia 3 veces en 9 peticiones)
 - `cd backend; python -m pytest tests -v`: pruebas (con `.venv` activo)
-- `ruff check backend`: estilo y errores
-- `Get-Content backend/Dockerfile | docker run --rm -i hadolint/hadolint`: revisar el Dockerfile
+- `cd backend; ruff check .`: estilo y errores (con `.venv` activo)
+- `Get-Content backend/Dockerfile | docker run --rm -i hadolint/hadolint:v2.15.1`: revisar el Dockerfile
 - En PowerShell usa `curl.exe`, no `curl` (es un alias de otro comando).
 
 ## Stack
@@ -22,7 +22,7 @@ backend/        app.py (rutas, middleware, métricas) · requirements.txt · Doc
 nginx/          nginx.conf (upstream, proxy, log de balanceo, stub_status en 8081)
 monitoring/     Fase 2: prometheus/ y grafana/ (provisioning y dashboards)
 k6/             Fase 3: carga.js
-docs/           CONTRATO.md · superpowers/ (specs y plans) · img/
+docs/           CONTRATO.md · img/
 .github/        workflows/ci.yml
 docker-compose.yml · README.md · CLAUDE.md
 ```
@@ -48,16 +48,6 @@ La fuente de verdad es `docs/CONTRATO.md`: servicios, puertos, red `so-net`, rut
 - **Informe:** Google Doc «Informe Triada» → https://docs.google.com/document/d/1MPO4G44Ge-d0srosCop8E2RMMqkFC38_iHEAW0BXBCg/edit. Cada sección tiene un texto gris «Pendiente · <dueño> …»: se reemplaza solo el de la sección propia, en Times New Roman 12 negro, con sangría de primera línea como el resto. Usar la skill `anthropic-skills:google-workspace` antes de editarlo. No tocar saltos de página, márgenes ni diseño de página: eso lo decide Manuel. Las capturas pendientes se marcan `[CAPTURA: qué mostrar · comando]`.
 - **README:** se actualiza la sección correspondiente al terminar cada cambio, no al final.
 - Escritura sin muletillas de IA (skill `humanizer` antes de dar por cerrado un texto).
-
-## Roles (subagentes)
-| Rol | Se encarga de | Skills |
-|---|---|---|
-| Principal DevOps / Platform Engineer (principal) | Coordina, Docker, Nginx, compose | `superpowers:subagent-driven-development`, `docker-compose-patterns`, `superpowers:verification-before-completion` |
-| Senior Python Backend Engineer | `app.py`, middleware, pruebas | `superpowers:test-driven-development` |
-| Senior SRE / Observability | Métricas contra el contrato | `superpowers:verification-before-completion` |
-| QA Automation Engineer | Balanceo, fallos, puertos, capturas | `testing-load-balancers`, `playwright-cli` |
-| Infrastructure Architect | Riesgos y aprobación del diseño | `superpowers:requesting-code-review` |
-| Senior CI/CD Engineer | Pipeline y revisión antes de cada PR | `ci-cd-and-automation`, `github-actions-templates`, `superpowers:finishing-a-development-branch` |
 
 ## Cosas a tener en cuenta
 - El laboratorio anterior (`C:\proyectos\lab-proxy`) también usa el puerto 8080: si está levantado, hay que bajarlo antes.

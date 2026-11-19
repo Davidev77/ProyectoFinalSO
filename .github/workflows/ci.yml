@@ -60,9 +60,14 @@ jobs:
       - name: Comprobar /metrics
         run: curl -fs http://localhost:8080/metrics | grep http_requests_total
 
-      # Se usa nginx:8081 (no localhost) porque en alpine localhost resuelve a IPv6
+      # Se consulta nginx:8081, el mismo camino que usará nginx-exporter en la Fase 2
       - name: Comprobar stub_status desde dentro de Nginx
         run: docker compose exec -T nginx wget -qO- http://nginx:8081/stub_status
+
+      - name: Comprobar que 8081 y 5000 no están publicados en el host
+        run: |
+          if curl -s -m 2 http://localhost:8081/stub_status; then echo "8081 publicado en el host"; exit 1; fi
+          if curl -s -m 2 http://localhost:5000/; then echo "5000 publicado en el host"; exit 1; fi
 
       - name: Mostrar logs y apagar el stack
         if: always()
