@@ -164,7 +164,18 @@ pip install -r backend/requirements.txt pytest==9.2.0 ruff==0.17.5
 
 ## Integración continua
 
-> Pendiente · Fase 1 (Manuel): qué revisa el pipeline en cada pull request.
+El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada pull request hacia `develop` o `main` y en cada push a `develop`. Tiene dos jobs, y los dos deben quedar en verde para fusionar:
+
+| Job | Qué revisa |
+| --- | --- |
+| `calidad` | `ruff check` sobre el backend, las pruebas con `pytest` y el Dockerfile con hadolint v2.15.1 (la misma versión que en local) |
+| `humo` | Solo corre si `calidad` pasó. Levanta el stack con `docker compose up -d --build --wait`, hace 9 peticiones y comprueba que respondieron las 3 instancias, revisa `/health`, `/metrics` y el `stub_status` de Nginx por la red interna, y al final muestra los logs y baja todo |
+
+Para revisar el workflow antes de subirlo:
+
+```powershell
+docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.7
+```
 
 ## Estructura
 

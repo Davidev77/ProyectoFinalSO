@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+# Mínimo privilegio: el CI solo necesita leer el repositorio
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt pytest==9.2.0 ruff==0.17.5
+
+      - name: Revisar estilo con ruff
+        run: ruff check .
+
+      - name: Ejecutar pruebas con pytest
+        run: python -m pytest tests -v
+
+      # Misma imagen y versión de hadolint que se usa en local
+      - name: Revisar el Dockerfile con hadolint
+        run: docker run --rm -i hadolint/hadolint:v2.15.1 < Dockerfile
+
+  humo:
+    needs: calidad
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Levantar el stack y esperar a que esté sano
+        run: docker compose up -d --build --wait
+
+      - name: Comprobar que el balanceo usa las 3 instancias
+        run: |
+          distintas=$(for _ in 1 2 3 4 5 6 7 8 9; do curl -s http://localhost:8080/ | jq -r .instancia; done | sort -u | wc -l)
+          echo "Instancias distintas: $distintas"
+          test "$distintas" -eq 3
+
+      - name: Comprobar /health
+        run: curl -fs http://localhost:8080/health
+
+      - name: Comprobar /metrics
+        run: curl -fs http://localhost:8080/metrics | grep http_requests_total
+
+      # Se usa nginx:8081 (no localhost) porque en alpine localhost resuelve a IPv6
+      - name: Comprobar stub_status desde dentro de Nginx
+        run: docker compose exec -T nginx wget -qO- http://nginx:8081/stub_status
+
+      - name: Mostrar logs y apagar el stack
+        if: always()
+        run: |
+          docker compose logs
+          docker compose down
