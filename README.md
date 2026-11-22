@@ -36,30 +36,9 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 | Página web en `/` para el navegador      | 3 · Eddie     | ✅ listo |
 | Pruebas de carga con k6                  | 3 · Eddie     | ✅ listo |
 
-## Arquitectura
+## Diagrama de Despliegue
 
-```mermaid
-flowchart LR
-    host["Navegador, curl o k6<br/>(host)"]
-    host -->|"localhost:8080"| nginx
-    host -.->|"localhost:3000"| grafana
-    host -.->|"localhost:9090"| prometheus
-    subgraph red["Red so-net (Docker)"]
-        nginx["nginx :80<br/>round robin<br/>stub_status :8081"]
-        nginx -->|":5000"| b1["backend1"]
-        nginx -->|":5000"| b2["backend2"]
-        nginx -->|":5000"| b3["backend3"]
-        exporter["nginx-exporter :9113"] -.->|"lee :8081/stub_status"| nginx
-        prometheus["Prometheus :9090"] -.->|"lee /metrics"| b1
-        prometheus -.-> b2
-        prometheus -.-> b3
-        prometheus -.-> exporter
-        prometheus -.-> cadvisor["cAdvisor :8080"]
-        grafana["Grafana :3000"] -.->|"consulta"| prometheus
-    end
-```
-
-Las líneas continuas son la Fase 1, ya construida; las punteadas, el monitoreo de la Fase 2, con los nombres y puertos que fija [`docs/CONTRATO.md`](docs/CONTRATO.md).
+![Diagrama de despliegue](docs/img/diagrama-despliegue.png)
 
 Nginx publica el puerto `8080` al host y reparte las peticiones en turnos entre los tres backends; si uno no responde, reintenta en el siguiente. Los backends son la misma imagen Flask con distinto `INSTANCE_ID` y escuchan en el `5000` dentro de la red `so-net`, sin acceso desde el host. Prometheus lee el `/metrics` de cada backend directamente (no a través de Nginx), las métricas de Nginx a través de `nginx-exporter`, que a su vez lee el `stub_status` interno del puerto `8081`, y las de cada contenedor a través de cAdvisor. Grafana consulta a Prometheus y muestra todo en el dashboard. Además de Nginx, se publican al host Prometheus (`9090`), Grafana (`3000`) y cAdvisor (`8082`). La prueba de carga con k6 (Fase 3) corre desde el host contra `localhost:8080`.
 
