@@ -60,7 +60,7 @@ jobs:
       - name: Comprobar /metrics
         run: curl -fs http://localhost:8080/metrics | grep http_requests_total
 
-      # Se consulta nginx:8081, el mismo camino que usará nginx-exporter en la Fase 2
+      # Se consulta nginx:8081, el mismo camino que usa nginx-exporter
       - name: Comprobar stub_status desde dentro de Nginx
         run: docker compose exec -T nginx wget -qO- http://nginx:8081/stub_status
 

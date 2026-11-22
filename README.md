@@ -20,8 +20,8 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 ## Qué hace
 
 1. Nginx recibe las peticiones en `http://localhost:8080` y las reparte en turnos (round robin) entre tres instancias del backend.
-2. Cada instancia responde con su número, así se ve a cuál fue cada petición.
-3. Cada instancia expone `/metrics` con la cantidad de peticiones y su duración.
+2. Cada instancia responde con su número, así se ve a cuál fue cada petición: como página web en el navegador y como JSON con `curl`.
+3. Cada instancia expone `/metrics` con la cantidad de peticiones y su duración (solo dentro de la red de Docker: Nginx no lo expone).
 4. Prometheus recolecta esas métricas, las de Nginx y las de cada contenedor; Grafana las muestra en un dashboard.
 
 ## Estado del proyecto
@@ -32,6 +32,7 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 | Nginx con balanceo y `stub_status` | 1 · Manuel | ✅ listo |
 | `docker-compose.yml` base | 1 · Manuel | ✅ listo |
 | Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ✅ listo |
+| Página web en `/` para el navegador | 3 · Eddie | ⏳ pendiente |
 | Pruebas de carga con k6 | 3 · Eddie | ⏳ pendiente |
 
 ## Arquitectura
@@ -59,7 +60,7 @@ flowchart LR
 
 Las líneas continuas son la Fase 1, ya construida; las punteadas, el monitoreo de la Fase 2, con los nombres y puertos que fija [`docs/CONTRATO.md`](docs/CONTRATO.md).
 
-Nginx publica el puerto `8080` al host y reparte las peticiones en turnos entre los tres backends; si uno no responde, reintenta en el siguiente. Los backends son la misma imagen Flask con distinto `INSTANCE_ID` y escuchan en el `5000` dentro de la red `so-net`, sin acceso desde el host. Prometheus lee el `/metrics` de cada backend directamente (no a través de Nginx), las métricas de Nginx a través de `nginx-exporter`, que a su vez lee el `stub_status` interno del puerto `8081`, y las de cada contenedor a través de cAdvisor. Grafana consulta a Prometheus y muestra todo en el dashboard. Además de Nginx, solo Prometheus y Grafana se publican al host. La prueba de carga con k6 (Fase 3) corre desde el host contra `localhost:8080`.
+Nginx publica el puerto `8080` al host y reparte las peticiones en turnos entre los tres backends; si uno no responde, reintenta en el siguiente. Los backends son la misma imagen Flask con distinto `INSTANCE_ID` y escuchan en el `5000` dentro de la red `so-net`, sin acceso desde el host. Prometheus lee el `/metrics` de cada backend directamente (no a través de Nginx), las métricas de Nginx a través de `nginx-exporter`, que a su vez lee el `stub_status` interno del puerto `8081`, y las de cada contenedor a través de cAdvisor. Grafana consulta a Prometheus y muestra todo en el dashboard. Además de Nginx, se publican al host Prometheus (`9090`), Grafana (`3000`) y cAdvisor (`8082`). La prueba de carga con k6 (Fase 3) corre desde el host contra `localhost:8080`.
 
 ## Puesta en marcha
 
@@ -85,6 +86,8 @@ docker compose up -d --build --wait
 
 `--wait` espera a que los backends, Prometheus y Grafana pasen su healthcheck. Se levantan 8 contenedores.
 
+El primer arranque tarda 2-3 minutos: Grafana crea su base de datos y Docker construye la imagen del backend. Los siguientes tardan segundos.
+
 Opcional: para cambiar la contraseña de Grafana, copia `.env.example` como `.env` y edita `GRAFANA_PASSWORD` antes de levantar.
 
 ### 3. Verificar que todo funciona
@@ -98,7 +101,7 @@ curl.exe -s http://localhost:8080/
 {"contenedor":"ab368547842f","instancia":"1","mensaje":"Hola desde la instancia 1"}
 ```
 
-También se puede abrir http://localhost:8080 en el navegador.
+`curl` recibe JSON. Si abres http://localhost:8080 en el navegador, Nginx entrega una página con la instancia que respondió; al recargar cambian el número y el color (round robin).
 
 ## URLs de acceso
 
@@ -157,7 +160,9 @@ Abre http://localhost:9090/targets. Deben aparecer **6 targets en UP**: `prometh
 1..30 | ForEach-Object { curl.exe -s "http://localhost:8080/lento?ms=800" | Out-Null }
 ```
 
-El dashboard tiene paneles de estado de targets, tasa de solicitudes y latencia p95 por instancia, errores 5xx, conexiones y peticiones por segundo de Nginx, y CPU, memoria, red y disco por contenedor.
+El dashboard tiene 12 paneles: estado de targets, tasa de solicitudes y latencia p95 por instancia, errores 5xx, conexiones y peticiones por segundo de Nginx, CPU, memoria, red y disco por contenedor, latencia p99 por instancia y total de peticiones atendidas por instancia en el rango de tiempo elegido.
+
+En el panel de CPU, 100 equivale a un núcleo completo: cada backend tiene un tope de `cpus: 0.5`, o sea 50 en esa escala.
 
 ### Persistencia
 
@@ -171,6 +176,12 @@ Los datos de Prometheus y Grafana viven en los volúmenes `prometheus_data` y `g
 
 Comandos en PowerShell, desde la raíz del repo. Usa `curl.exe`: en PowerShell, `curl` es un alias de otro comando.
 
+En Linux o macOS usa `curl` en lugar de `curl.exe`. Para ver el reparto en bash:
+
+```bash
+for i in $(seq 9); do curl -s http://localhost:8080/ | grep -o '"instancia":"[0-9]"'; done
+```
+
 | Comando | Para qué |
 | --- | --- |
 | `docker compose up -d --build --wait` | Construir y levantar todo |
@@ -180,6 +191,7 @@ Comandos en PowerShell, desde la raíz del repo. Usa `curl.exe`: en PowerShell, 
 | `docker compose exec backend1 whoami` | Comprobar que el backend no corre como root (`triada`) |
 | `docker stats --no-stream` | CPU y memoria de cada contenedor (límite de 256 MiB por backend) |
 | `curl.exe -s "http://localhost:8080/lento?ms=300"` | Respuesta lenta a propósito (máximo 2000 ms) |
+| `docker compose exec nginx wget -qO- http://backend1:5000/metrics` | Ver las métricas de un backend (Nginx no expone `/metrics`) |
 | `docker compose stop backend2` · `docker compose start backend2` | Simular la caída de un backend |
 | `docker compose down` | Bajar todo |
 | `cd backend; python -m pytest tests -v` | Pruebas del backend (con `.venv` activo) |
@@ -197,7 +209,7 @@ pip install -r backend/requirements.txt pytest==9.2.0 ruff==0.17.5
 ## Estructura
 
 ```
-backend/            app Flask, Dockerfile y pruebas
+backend/            app Flask, plantilla HTML (templates/), Dockerfile y pruebas
 nginx/              nginx.conf
 monitoring/         prometheus.yml, provisioning de Grafana y dashboard (Fase 2)
 k6/                 pruebas de carga (Fase 3)
