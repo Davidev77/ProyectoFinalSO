@@ -57,8 +57,30 @@ jobs:
       - name: Comprobar /health
         run: curl -fs http://localhost:8080/health
 
-      - name: Comprobar /metrics
-        run: curl -fs http://localhost:8080/metrics | grep http_requests_total
+      - name: Comprobar que un navegador recibe la página HTML
+        run: |
+          curl -fs -H "Accept: text/html" http://localhost:8080/ | grep "Instancia"
+
+      # /metrics no sale por Nginx (404): Prometheus lo lee directo en cada backend
+      - name: Comprobar /metrics (directo en el backend y bloqueado en Nginx)
+        run: |
+          docker compose exec -T nginx wget -qO- http://backend1:5000/metrics | grep http_requests_total
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/metrics)" = "404"
+
+      - name: Comprobar que Prometheus ve los 6 targets arriba
+        run: |
+          for _ in $(seq 1 12); do
+            arriba=$(curl -s http://localhost:9090/api/v1/query --data-urlencode 'query=count(up == 1)' | jq -r '.data.result[0].value[1]')
+            echo "Targets arriba: $arriba"
+            test "$arriba" = "6" && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Comprobar Grafana y su dashboard
+        run: |
+          curl -fs http://localhost:3000/api/health | jq -e '.database == "ok"'
+          curl -fs -u admin:admin123 "http://localhost:3000/api/search?query=Infraestructura" | jq -e 'length == 1'
 
       # Se consulta nginx:8081, el mismo camino que usa nginx-exporter
       - name: Comprobar stub_status desde dentro de Nginx
