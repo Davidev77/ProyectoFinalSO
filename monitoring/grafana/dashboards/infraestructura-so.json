@@ -1,12 +1,10 @@
 {
   "uid": "infraestructura-so",
   "title": "Infraestructura SO",
-  "tags": [
-    "triada"
-  ],
+  "tags": ["triada"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "5s",
   "time": {
@@ -70,9 +68,7 @@
         "graphMode": "none",
         "textMode": "value_and_name",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         }
@@ -120,10 +116,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -144,6 +137,75 @@
     },
     {
       "id": 3,
+      "type": "stat",
+      "title": "Peticiones atendidas por instancia (rango visible)",
+      "description": "Total de peticiones que atendió cada backend en el rango de tiempo seleccionado. Si el balanceo es parejo, los tres números son casi iguales.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(http_requests_total{instancia=\"1\"}[$__range])) or vector(0)",
+          "instant": true,
+          "legendFormat": "instancia 1",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(http_requests_total{instancia=\"2\"}[$__range])) or vector(0)",
+          "instant": true,
+          "legendFormat": "instancia 2",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(http_requests_total{instancia=\"3\"}[$__range])) or vector(0)",
+          "instant": true,
+          "legendFormat": "instancia 3",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 4,
       "type": "timeseries",
       "title": "Latencia p95 por instancia",
       "description": "El 95 % de las peticiones tarda menos que este valor. Sube con /lento?ms=.",
@@ -173,10 +235,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -196,7 +255,57 @@
       ]
     },
     {
-      "id": 4,
+      "id": 5,
+      "type": "timeseries",
+      "title": "Latencia p99 por instancia",
+      "description": "El 99 % de las peticiones tarda menos que este valor. Muestra los casos más lentos.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, instancia) (rate(http_request_duration_seconds_bucket[1m])))",
+          "legendFormat": "instancia {{instancia}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
       "type": "timeseries",
       "title": "Errores 5xx",
       "description": "Respuestas con código 5xx por segundo. Lo normal es 0.",
@@ -206,7 +315,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 21,
         "w": 8,
         "h": 8
       },
@@ -226,10 +335,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -258,7 +364,7 @@
       ]
     },
     {
-      "id": 5,
+      "id": 7,
       "type": "timeseries",
       "title": "Nginx: conexiones activas",
       "description": "Conexiones abiertas ahora mismo en Nginx (stub_status).",
@@ -268,7 +374,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 13,
+        "y": 21,
         "w": 8,
         "h": 8
       },
@@ -288,10 +394,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -320,7 +423,7 @@
       ]
     },
     {
-      "id": 6,
+      "id": 8,
       "type": "timeseries",
       "title": "Nginx: peticiones por segundo",
       "description": "Peticiones que Nginx recibe del cliente (todas las rutas).",
@@ -330,7 +433,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 13,
+        "y": 21,
         "w": 8,
         "h": 8
       },
@@ -350,10 +453,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -373,7 +473,7 @@
       ]
     },
     {
-      "id": 7,
+      "id": 9,
       "type": "timeseries",
       "title": "CPU por contenedor",
       "description": "Uso de CPU en % de un núcleo (cada backend tiene tope de 50 %).",
@@ -383,7 +483,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 29,
         "w": 12,
         "h": 8
       },
@@ -403,10 +503,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -426,7 +523,7 @@
       ]
     },
     {
-      "id": 8,
+      "id": 10,
       "type": "timeseries",
       "title": "Memoria por contenedor",
       "description": "Memoria en uso (working set). Cada backend tiene tope de 256 MiB.",
@@ -436,7 +533,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 21,
+        "y": 29,
         "w": 12,
         "h": 8
       },
@@ -456,10 +553,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -479,7 +573,7 @@
       ]
     },
     {
-      "id": 9,
+      "id": 11,
       "type": "timeseries",
       "title": "Red por contenedor",
       "description": "Bytes por segundo recibidos (rx) y enviados (tx).",
@@ -489,7 +583,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 37,
         "w": 12,
         "h": 8
       },
@@ -509,10 +603,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -541,7 +632,7 @@
       ]
     },
     {
-      "id": 10,
+      "id": 12,
       "type": "timeseries",
       "title": "Disco por contenedor",
       "description": "Bytes por segundo leídos y escritos en disco.",
@@ -551,7 +642,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 29,
+        "y": 37,
         "w": 12,
         "h": 8
       },
@@ -571,10 +662,7 @@
         "legend": {
           "displayMode": "table",
           "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
+          "calcs": ["lastNotNull", "max"]
         },
         "tooltip": {
           "mode": "multi",
