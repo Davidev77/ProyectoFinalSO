@@ -10,6 +10,7 @@
 ![Nginx](https://img.shields.io/badge/Nginx-1.27-009639?logo=nginx&logoColor=white)
 ![Prometheus](https://img.shields.io/badge/Prometheus-monitoreo-E6522C?logo=prometheus&logoColor=white)
 ![Grafana](https://img.shields.io/badge/Grafana-dashboards-F46800?logo=grafana&logoColor=white)
+![K6](https://img.shields.io/badge/Grafana-pruebas-7D64FF?logo=k6&logoColor=white)
 
 Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO) · 2026
 
@@ -26,14 +27,14 @@ Proyecto final de Sistemas Operativos · Universidad Autónoma de Occidente (UAO
 
 ## Estado del proyecto
 
-| Pieza | Fase | Estado |
-| --- | --- | --- |
-| Backends Flask con métricas | 1 · Manuel | ✅ listo |
-| Nginx con balanceo y `stub_status` | 1 · Manuel | ✅ listo |
-| `docker-compose.yml` base | 1 · Manuel | ✅ listo |
+| Pieza                                    | Fase          | Estado   |
+| ---------------------------------------- | ------------- | -------- |
+| Backends Flask con métricas              | 1 · Manuel    | ✅ listo |
+| Nginx con balanceo y `stub_status`       | 1 · Manuel    | ✅ listo |
+| `docker-compose.yml` base                | 1 · Manuel    | ✅ listo |
 | Prometheus, exporter, cAdvisor y Grafana | 2 · Christian | ✅ listo |
-| Página web en `/` para el navegador | 3 · Eddie | ⏳ pendiente |
-| Pruebas de carga con k6 | 3 · Eddie | ⏳ pendiente |
+| Página web en `/` para el navegador      | 3 · Eddie     | ✅ listo |
+| Pruebas de carga con k6                  | 3 · Eddie     | ✅ listo |
 
 ## Arquitectura
 
@@ -98,19 +99,23 @@ curl.exe -s http://localhost:8080/
 ```
 
 ```json
-{"contenedor":"ab368547842f","instancia":"1","mensaje":"Hola desde la instancia 1"}
+{
+  "contenedor": "ab368547842f",
+  "instancia": "1",
+  "mensaje": "Hola desde la instancia 1"
+}
 ```
 
 `curl` recibe JSON. Si abres http://localhost:8080 en el navegador, Nginx entrega una página con la instancia que respondió; al recargar cambian el número y el color (round robin).
 
 ## URLs de acceso
 
-| Servicio | URL | Credenciales |
-| --- | --- | --- |
-| Aplicación (Nginx) | http://localhost:8080 | — |
-| Prometheus | http://localhost:9090 | — |
-| Grafana | http://localhost:3000 | usuario `admin` · contraseña `admin123` (o la de `GRAFANA_PASSWORD` en `.env`) |
-| cAdvisor | http://localhost:8082 | — |
+| Servicio           | URL                   | Credenciales                                                                   |
+| ------------------ | --------------------- | ------------------------------------------------------------------------------ |
+| Aplicación (Nginx) | http://localhost:8080 | —                                                                              |
+| Prometheus         | http://localhost:9090 | —                                                                              |
+| Grafana            | http://localhost:3000 | usuario `admin` · contraseña `admin123` (o la de `GRAFANA_PASSWORD` en `.env`) |
+| cAdvisor           | http://localhost:8082 | —                                                                              |
 
 ## Verificar el balanceo de carga
 
@@ -170,7 +175,66 @@ Los datos de Prometheus y Grafana viven en los volúmenes `prometheus_data` y `g
 
 ## Pruebas de carga
 
-> Pendiente · Fase 3 (Eddie): instalar k6, comando para correr la prueba y cómo leer el resultado.
+Las pruebas usan [k6](https://grafana.com/docs/k6/latest/) y corren desde tu computador (no desde Docker) contra `http://localhost:8080`.
+
+### Instalar k6
+
+- Windows: `winget install k6 --source winget`
+- Otros sistemas: sigue la [guía oficial](https://grafana.com/docs/k6/latest/set-up/install-k6/).
+
+Comprueba con `k6 version`.
+
+### Ejecutar
+
+Con la infraestructura levantada (`docker compose up -d --build --wait`) y Grafana abierto en http://localhost:3000:
+
+```powershell
+k6 run -e ESCENARIO=normal k6/carga.js
+k6 run -e ESCENARIO=pico k6/carga.js
+```
+
+| Escenario | Forma                                                        | Qué busca                                 |
+| --------- | ------------------------------------------------------------ | ----------------------------------------- |
+| `normal`  | sube a 20 usuarios en 1 min, se sostiene 3 min, baja en 30 s | Comportamiento con uso típico             |
+| `pico`    | sube a 100 usuarios, los sostiene 2 min                      | Encontrar el límite de la infraestructura |
+
+Para cambiar el tamaño del pico: `-e VUS_PICO=150`.
+
+### Cómo leer el resultado
+
+- `http_reqs`: peticiones totales y por segundo.
+- `http_req_duration`: tiempo de respuesta; `p(95)` y `p(99)` son los tiempos bajo los cuales responde el 95 % y el 99 % de las peticiones.
+- `http_req_failed`: porcentaje de errores.
+- `peticiones_instancia1/2/3`: cuántas respuestas atendió cada backend (el reparto del balanceo).
+- Umbrales: la prueba pasa si el p95 es menor a 500 ms y los errores son menores al 1 %. Una marca ✗ en un umbral significa que no se cumplió.
+
+Mientras corre, el dashboard **Infraestructura SO** muestra la carga por instancia, la latencia y el consumo de cada contenedor.
+
+### Probar la tolerancia a fallos en plena carga
+
+En otra terminal, a mitad de la prueba: `docker compose stop backend2`; más tarde, `docker compose start backend2`.
+
+### Resultados Prueba de Carga
+
+Las imagenes puedes encontrarlas en `docs/images/*.png`, se separan por los tres escenarios probadas
+
+#### Escenario A: Prueba Normal
+
+![Prueba normal dashboard](docs/img/normal-dashboard.png)
+![Prueba normal recursos](docs/img/normal-recursos.png)
+![Prueba normal k6](docs/img/normal-k6.png)
+
+#### Escenario A: Prueba con Pico
+
+![Prueba pico dashboard](docs/img/pico-dashboard.png)
+![Prueba pico recursos](docs/img/pico-recursos.png)
+![Prueba pico k6](docs/img/pico-k6.png)
+
+#### Escenario A: Prueba Normal + Caida Backend 2
+
+![Prueba normal caida dashboard](docs/img/normal-caida-dashboard.png)
+![Prueba normal caida recursos](docs/img/normal-caida-recursos.png)
+![Prueba normal caida k6](docs/img/normal-caida-k6.png)
 
 ## Comandos
 
@@ -182,21 +246,21 @@ En Linux o macOS usa `curl` en lugar de `curl.exe`. Para ver el reparto en bash:
 for i in $(seq 9); do curl -s http://localhost:8080/ | grep -o '"instancia":"[0-9]"'; done
 ```
 
-| Comando | Para qué |
-| --- | --- |
-| `docker compose up -d --build --wait` | Construir y levantar todo |
-| `docker compose ps` | Estado de los servicios |
-| `docker compose logs nginx --tail 20` | Log de balanceo (`instancia=`, `tiempo=`) |
-| `docker compose exec nginx wget -qO- http://127.0.0.1:8081/stub_status` | Ver `stub_status` desde dentro de Nginx |
-| `docker compose exec backend1 whoami` | Comprobar que el backend no corre como root (`triada`) |
-| `docker stats --no-stream` | CPU y memoria de cada contenedor (límite de 256 MiB por backend) |
-| `curl.exe -s "http://localhost:8080/lento?ms=300"` | Respuesta lenta a propósito (máximo 2000 ms) |
-| `docker compose exec nginx wget -qO- http://backend1:5000/metrics` | Ver las métricas de un backend (Nginx no expone `/metrics`) |
-| `docker compose stop backend2` · `docker compose start backend2` | Simular la caída de un backend |
-| `docker compose down` | Bajar todo |
-| `cd backend; python -m pytest tests -v` | Pruebas del backend (con `.venv` activo) |
-| `cd backend; ruff check .` | Estilo y errores de Python (con `.venv` activo) |
-| `Get-Content backend/Dockerfile \| docker run --rm -i hadolint/hadolint:v2.15.1` | Revisar el Dockerfile |
+| Comando                                                                          | Para qué                                                         |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `docker compose up -d --build --wait`                                            | Construir y levantar todo                                        |
+| `docker compose ps`                                                              | Estado de los servicios                                          |
+| `docker compose logs nginx --tail 20`                                            | Log de balanceo (`instancia=`, `tiempo=`)                        |
+| `docker compose exec nginx wget -qO- http://127.0.0.1:8081/stub_status`          | Ver `stub_status` desde dentro de Nginx                          |
+| `docker compose exec backend1 whoami`                                            | Comprobar que el backend no corre como root (`triada`)           |
+| `docker stats --no-stream`                                                       | CPU y memoria de cada contenedor (límite de 256 MiB por backend) |
+| `curl.exe -s "http://localhost:8080/lento?ms=300"`                               | Respuesta lenta a propósito (máximo 2000 ms)                     |
+| `docker compose exec nginx wget -qO- http://backend1:5000/metrics`               | Ver las métricas de un backend (Nginx no expone `/metrics`)      |
+| `docker compose stop backend2` · `docker compose start backend2`                 | Simular la caída de un backend                                   |
+| `docker compose down`                                                            | Bajar todo                                                       |
+| `cd backend; python -m pytest tests -v`                                          | Pruebas del backend (con `.venv` activo)                         |
+| `cd backend; ruff check .`                                                       | Estilo y errores de Python (con `.venv` activo)                  |
+| `Get-Content backend/Dockerfile \| docker run --rm -i hadolint/hadolint:v2.15.1` | Revisar el Dockerfile                                            |
 
 Para preparar el entorno de pruebas una sola vez:
 
@@ -225,10 +289,10 @@ docker-compose.yml
 
 ## Documentación
 
-| Documento | Contenido |
-| --- | --- |
-| [`docs/CONTRATO.md`](docs/CONTRATO.md) | Servicios, puertos, rutas y métricas que comparten las fases |
-| [Informe (Google Docs)](https://docs.google.com/document/d/1MPO4G44Ge-d0srosCop8E2RMMqkFC38_iHEAW0BXBCg/edit) | Informe del proyecto en formato APA 7 |
+| Documento                                                                                                     | Contenido                                                    |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [`docs/CONTRATO.md`](docs/CONTRATO.md)                                                                        | Servicios, puertos, rutas y métricas que comparten las fases |
+| [Informe (Google Docs)](https://docs.google.com/document/d/1MPO4G44Ge-d0srosCop8E2RMMqkFC38_iHEAW0BXBCg/edit) | Informe del proyecto en formato APA 7                        |
 
 ## Autores
 
