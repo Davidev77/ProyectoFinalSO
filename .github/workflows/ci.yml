@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+# Mínimo privilegio: el CI solo necesita leer el repositorio
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt pytest==9.2.0 ruff==0.17.5
+
+      - name: Revisar estilo con ruff
+        run: ruff check .
+
+      - name: Ejecutar pruebas con pytest
+        run: python -m pytest tests -v
+
+      # Misma imagen y versión de hadolint que se usa en local
+      - name: Revisar el Dockerfile con hadolint
+        run: docker run --rm -i hadolint/hadolint:v2.15.1 < Dockerfile
+
+  humo:
+    needs: calidad
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Levantar el stack y esperar a que esté sano
+        run: docker compose up -d --build --wait
+
+      - name: Comprobar que el balanceo usa las 3 instancias
+        run: |
+          distintas=$(for _ in 1 2 3 4 5 6 7 8 9; do curl -s http://localhost:8080/ | jq -r .instancia; done | sort -u | wc -l)
+          echo "Instancias distintas: $distintas"
+          test "$distintas" -eq 3
+
+      - name: Comprobar /health
+        run: curl -fs http://localhost:8080/health
+
+      - name: Comprobar que un navegador recibe la página HTML
+        run: |
+          curl -fs -H "Accept: text/html" http://localhost:8080/ | grep "Instancia"
+
+      # /metrics no sale por Nginx (404): Prometheus lo lee directo en cada backend
+      - name: Comprobar /metrics (directo en el backend y bloqueado en Nginx)
+        run: |
+          docker compose exec -T nginx wget -qO- http://backend1:5000/metrics | grep http_requests_total
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/metrics)" = "404"
+
+      - name: Comprobar que Prometheus ve los 6 targets arriba
+        run: |
+          for _ in $(seq 1 12); do
+            arriba=$(curl -s http://localhost:9090/api/v1/query --data-urlencode 'query=count(up == 1)' | jq -r '.data.result[0].value[1]')
+            echo "Targets arriba: $arriba"
+            test "$arriba" = "6" && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Comprobar Grafana y su dashboard
+        run: |
+          curl -fs http://localhost:3000/api/health | jq -e '.database == "ok"'
+          curl -fs -u admin:admin123 "http://localhost:3000/api/search?query=Infraestructura" | jq -e 'length == 1'
+
+      # Se consulta nginx:8081, el mismo camino que usa nginx-exporter
+      - name: Comprobar stub_status desde dentro de Nginx
+        run: docker compose exec -T nginx wget -qO- http://nginx:8081/stub_status
+
+      - name: Comprobar que 8081 y 5000 no están publicados en el host
+        run: |
+          if curl -s -m 2 http://localhost:8081/stub_status; then echo "8081 publicado en el host"; exit 1; fi
+          if curl -s -m 2 http://localhost:5000/; then echo "5000 publicado en el host"; exit 1; fi
+
+      - name: Mostrar logs y apagar el stack
+        if: always()
+        run: |
+          docker compose logs
+          docker compose down
