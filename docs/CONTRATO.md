@@ -31,9 +31,9 @@ Reglas: los backends y el 8081 de Nginx nunca se publican al host. Todos los ser
 
 | Ruta | Respuesta | Se mide |
 |---|---|---|
-| `GET /` | `200` `{"instancia": "1", "mensaje": "...", "contenedor": "<hostname>"}` | Sí |
+| `GET /` | `200` JSON `{"instancia": "1", "mensaje": "...", "contenedor": "<hostname>"}` para quien no pide HTML (curl, k6, CI). Si el cliente envía `Accept: text/html` (un navegador), `200` con una página HTML | Sí |
 | `GET /health` | `200` `{"estado": "ok", "instancia": "1"}` | No |
-| `GET /metrics` | texto Prometheus | No |
+| `GET /metrics` | texto Prometheus. Solo interna: Nginx responde `404` en `:8080`; Prometheus lo lee en `backendN:5000` | No |
 | `GET /lento?ms=<n>` | `200` `{"instancia": "1", "espera_ms": n}` · defecto 500 · acotado a 0–2000 | Sí |
 
 **Métricas** (registro por defecto de `prometheus_client`, un solo proceso de gunicorn):
@@ -59,6 +59,7 @@ sum by (instancia) (rate(http_requests_total{codigo=~"5.."}[1m]))
 
 - `upstream backends` con `zone`, round robin, `max_fails=3 fail_timeout=10s` por servidor.
 - Cabeceras hacia el backend: `Host`, `X-Real-IP`, `X-Forwarded-For`.
+- `location = /metrics` responde `404`: las métricas no se exponen por el puerto público.
 - Cabecera de respuesta: `X-Upstream` = `$upstream_addr` (IP:puerto del backend que respondió).
 - Log `balanceo`: `estado=`, `instancia=` (`$upstream_addr`), `tiempo=`, `upstream_tiempo=`. Se ve con `docker compose logs nginx`.
 - `stub_status` en `http://nginx:8081/stub_status`, solo dentro de `so-net`. La Fase 2 lo lee con `--nginx.scrape-uri=http://nginx:8081/stub_status`.
@@ -76,9 +77,9 @@ sum by (instancia) (rate(http_requests_total{codigo=~"5.."}[1m]))
 
 | Fase | Archivos |
 |---|---|
-| 1 | `backend/`, `nginx/nginx.conf`, `docker-compose.yml` (backends, nginx, red), `.github/workflows/ci.yml` |
+| 1 | `backend/` (incluye `templates/inicio.html`), `nginx/nginx.conf`, `docker-compose.yml` (backends, nginx, red), `.github/workflows/ci.yml` |
 | 2 | `monitoring/prometheus/prometheus.yml`, `monitoring/grafana/provisioning/datasources/`, `monitoring/grafana/provisioning/dashboards/`, `monitoring/grafana/dashboards/infraestructura-so.json`, servicios y volúmenes `prometheus_data`, `grafana_data` en el compose |
-| 3 | `k6/carga.js` |
+| 3 | `k6/carga.js` (los resultados van a `k6/resultados/`, ignorada por Git) |
 
 ## Recursos
 

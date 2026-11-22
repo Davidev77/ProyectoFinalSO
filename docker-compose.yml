@@ -7,11 +7,17 @@ x-backend: &backend
   restart: unless-stopped
   networks:
     - so-net
-  cpus: 0.5          # techo de CPU por backend
-  mem_limit: 256m    # techo de memoria por backend
+  cpus: 0.5 # techo de CPU por backend
+  mem_limit: 256m # techo de memoria por backend
   # La imagen no tiene curl: el healthcheck usa Python.
   healthcheck:
-    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+    test:
+      [
+        "CMD",
+        "python",
+        "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')",
+      ]
     interval: 5s
     timeout: 3s
     retries: 5
@@ -67,7 +73,15 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9090/-/healthy",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -90,7 +104,7 @@ services:
   # cAdvisor: CPU, memoria, red y disco de cada contenedor.
   # Los volúmenes son de solo lectura; privileged y /dev/kmsg los pide cAdvisor en Docker Desktop.
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     command:
       - --docker_only=true
     privileged: true
@@ -125,11 +139,19 @@ services:
       prometheus:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 20s
+      start_period: 120s # primer arranque: Grafana crea su base de datos (~90 s)
     restart: unless-stopped
     networks:
       - so-net

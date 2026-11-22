@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tríada · Instancia {{ instancia }}</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --color: {{ color }};
+        --fondo: #f3f4f6; --tarjeta: #ffffff; --texto: #111827; --suave: #6b7280; --borde: #e5e7eb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --fondo: #0f172a; --tarjeta: #1e293b; --texto: #f1f5f9; --suave: #94a3b8; --borde: #334155; }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--fondo); color: var(--texto);
+             font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
+      main { max-width: 880px; margin: 0 auto; padding: 32px 16px 48px; }
+      h1 { margin: 0; font-size: 1.6rem; }
+      h2 { margin: 0 0 12px; font-size: 1.05rem; }
+      .sub { color: var(--suave); margin: 4px 0 24px; }
+      .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px;
+                 padding: 20px; margin-bottom: 16px; }
+      .principal { border-top: 6px solid var(--color); display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+      .numero { width: 84px; height: 84px; border-radius: 50%; background: var(--color); color: #fff;
+                display: grid; place-items: center; font-size: 2.6rem; font-weight: 700; }
+      .principal p { margin: 0; color: var(--suave); }
+      .principal strong { display: block; font-size: 1.5rem; color: var(--texto); }
+      .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+      .dato span { display: block; color: var(--suave); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+      .dato b { font-size: 1.05rem; word-break: break-all; }
+      .historial { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; min-height: 34px; }
+      .ficha { width: 34px; height: 34px; border-radius: 8px; color: #fff; display: grid; place-items: center; font-weight: 700; }
+      button { background: var(--color); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px;
+               font-size: .95rem; cursor: pointer; }
+      button.gris { background: transparent; color: var(--suave); border: 1px solid var(--borde); margin-left: 8px; }
+      table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+      th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+      th { color: var(--suave); font-weight: 600; font-size: .8rem; text-transform: uppercase; }
+      code { background: var(--fondo); padding: 1px 6px; border-radius: 4px; }
+      a { color: var(--color); }
+      .enlaces a { margin-right: 16px; }
+      footer { color: var(--suave); font-size: .85rem; margin-top: 24px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tríada</h1>
+      <p class="sub">
+        Tres backends Flask detrás de Nginx · Proyecto final de Sistemas
+        Operativos · UAO
+      </p>
+
+      <section class="tarjeta principal">
+        <div class="numero">{{ instancia }}</div>
+        <div>
+          <p>Esta respuesta la atendió la</p>
+          <strong>Instancia {{ instancia }}</strong>
+          <p>{{ mensaje }}</p>
+        </div>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Esta instancia</h2>
+        <div class="datos">
+          <div class="dato"><span>Contenedor</span><b>{{ contenedor }}</b></div>
+          <div class="dato"><span>Encendida hace</span><b>{{ activa }}</b></div>
+          <div class="dato">
+            <span>Peticiones atendidas</span><b>{{ atendidas }}</b>
+          </div>
+        </div>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Balanceo en vivo</h2>
+        <p class="sub" style="margin: 0">
+          Cada recarga pasa por Nginx, que elige el siguiente backend por turnos
+          (round robin). Estas son las últimas instancias que te respondieron,
+          de la más antigua a la más reciente:
+        </p>
+        <div
+          class="historial"
+          id="historial"
+          data-colores="{{ colores|tojson|forceescape }}"
+          data-instancia="{{ instancia }}"
+          data-inicio="{{ inicio }}"
+        ></div>
+        <button onclick="location.reload()">Pedir otra vez</button>
+        <button class="gris" onclick="limpiar()">Borrar historial</button>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Endpoints</h2>
+        <table>
+          <tr>
+            <th>Ruta</th>
+            <th>Qué devuelve</th>
+          </tr>
+          <tr>
+            <td>
+              <a href="/"><code>/</code></a>
+            </td>
+            <td>
+              Esta página en el navegador; JSON para <code>curl</code> y k6
+              (<code>instancia</code>, <code>mensaje</code>,
+              <code>contenedor</code>).
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <a href="/health"><code>/health</code></a>
+            </td>
+            <td>Estado de la instancia. Docker lo consulta cada 5 s.</td>
+          </tr>
+          <tr>
+            <td>
+              <a href="/lento?ms=800"><code>/lento?ms=800</code></a>
+            </td>
+            <td>
+              Responde tras esperar <code>ms</code> milisegundos (máximo 2000).
+              Sirve para ver subir la latencia.
+            </td>
+          </tr>
+          <tr>
+            <td><code>/metrics</code></td>
+            <td>
+              Métricas para Prometheus. Solo accesible dentro de la red de
+              Docker, no por Nginx.
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Monitoreo</h2>
+        <p class="enlaces">
+          <a
+            href="http://{{ host }}:3000/d/infraestructura-so"
+            target="_blank"
+            rel="noopener"
+            >Grafana · Dashboard</a
+          >
+          <a
+            href="http://{{ host }}:9090/targets"
+            target="_blank"
+            rel="noopener"
+            >Prometheus · Targets</a
+          >
+          <a href="http://{{ host }}:8082" target="_blank" rel="noopener"
+            >cAdvisor</a
+          >
+        </p>
+      </section>
+
+      <footer>Eddie Delgado · Christian Home · Manuel Betancurt</footer>
+    </main>
+
+    <script>
+      // El historial vive solo en este navegador (localStorage); el servidor no guarda nada.
+      // Se borra solo cuando un contenedor se reinicia: cada contenedor informa cuándo arrancó
+      // y, si ese valor cambió desde la última vez que respondió, el historial es de otra ejecución.
+      var caja = document.getElementById("historial");
+      var COLORES = JSON.parse(caja.dataset.colores);
+      var actual = caja.dataset.instancia;
+      var inicio = caja.dataset.inicio;
+      var LLAVE = "triada_historial";
+
+      function vacio() {
+        return { lista: [], inicios: {} };
+      }
+      function leer() {
+        try {
+          var datos = JSON.parse(localStorage.getItem(LLAVE));
+          if (datos && Array.isArray(datos.lista) && datos.inicios) return datos;
+        } catch (e) {}
+        return vacio();
+      }
+      function guardar(datos) {
+        try {
+          localStorage.setItem(LLAVE, JSON.stringify(datos));
+        } catch (e) {}
+      }
+      function pintar(lista) {
+        caja.innerHTML = "";
+        lista.forEach(function (n) {
+          var ficha = document.createElement("div");
+          ficha.className = "ficha";
+          ficha.textContent = n;
+          ficha.style.background = COLORES[n] || "#6b7280";
+          caja.appendChild(ficha);
+        });
+      }
+      function limpiar() {
+        guardar(vacio());
+        pintar([]);
+      }
+
+      var datos = leer();
+      if (datos.inicios[actual] && datos.inicios[actual] !== inicio) {
+        datos = vacio(); // este contenedor se reinició: se empieza de cero
+      }
+      datos.inicios[actual] = inicio;
+      datos.lista.push(actual);
+      datos.lista = datos.lista.slice(-12);
+      guardar(datos);
+      pintar(datos.lista);
+    </script>
+  </body>
+</html>
