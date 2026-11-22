@@ -7,6 +7,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
+COPY templates/ templates/
 
 # Usuario sin privilegios (sin home ni shell): si alguien vulnera el proceso, no es root
 RUN useradd --no-create-home --shell /usr/sbin/nologin triada
